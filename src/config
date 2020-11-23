@@ -1,0 +1,44 @@
+defkey 282 thumbkey;
+defkey 278 thumbtop;
+defkey 277 thumbbottom;
+
+defkey 279 indextop;
+
+
+trap [btn_left, btn_middle, btn_right] |event| {
+    if keydown(thumbkey) {
+        send_event event;
+        sync;
+        send_event keyup event;
+        trap next keyup event {};
+    } else send_event event;
+}
+
+function replaceblock |direction| {
+    send_event keyup=direction btn_left;
+    send_event keyup=direction btn_right;
+}
+
+trap indextop |event| {
+    if keydown(thumbkey) {
+        replaceblock false;
+        sync;
+        replaceblock true;
+        trap next keyup indextop {};
+    } else {
+        replaceblock false;
+    }
+}
+
+trap keyup {
+    replaceblock true;
+}
+
+if keydown(thumbbottom) {
+    trap [mwheelup_hires, mwheeldown_hires] {}
+    trap [mwheelup, mwheeldown] |ev| {
+        send_event keydown [volumeup, volumedown];
+        sync;
+        send_event keyup [volumeup, volumedown];
+    }
+}
