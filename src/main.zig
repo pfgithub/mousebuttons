@@ -367,26 +367,6 @@ pub fn main() !void {
                     try writer.writeAll(&std.mem.toBytes(inputEvent(c.EV_KEY, c.KEY_UNKNOWN, event.value)));
                     continue;
                 }
-                if (event.code == c.BTN_LEFT) {
-                    lmb_active = event.value == 1;
-                    try writer.writeAll(&std.mem.toBytes(event));
-                    if (timer_enabled and event.value == 1) {
-                        try writer.writeAll(&std.mem.toBytes(inputEvent(c.EV_SYN, c.SYN_REPORT, 0)));
-                        try writer.writeAll(&std.mem.toBytes(inputEvent(c.EV_KEY, c.BTN_LEFT, 0)));
-                        // huh there's a chance for a missed syn_report here because of multithreading
-                    }
-                    continue;
-                }
-                if (event.code == c.BTN_RIGHT) {
-                    lmb_active = event.value == 1;
-                    try writer.writeAll(&std.mem.toBytes(event));
-                    if (timer_enabled and event.value == 1) {
-                        try writer.writeAll(&std.mem.toBytes(inputEvent(c.EV_SYN, c.SYN_REPORT, 0)));
-                        try writer.writeAll(&std.mem.toBytes(inputEvent(c.EV_KEY, c.BTN_RIGHT, 0)));
-                        // huh there's a chance for a missed syn_report here because of multithreading
-                    }
-                    continue;
-                }
                 inline for (.{ .{ c.BTN_LEFT, 9001 }, .{ c.BTN_RIGHT, 9002 }, .{ c.BTN_MIDDLE, 9003 } }) |btninfo, i| {
                     const button = btninfo[0];
                     const scancode = btninfo[1];
@@ -404,6 +384,26 @@ pub fn main() !void {
                             continue :wlp;
                         }
                     }
+                }
+                if (event.code == c.BTN_LEFT) {
+                    lmb_active = event.value == 1;
+                    try writer.writeAll(&std.mem.toBytes(event));
+                    if (timer_enabled and event.value == 1) {
+                        try writer.writeAll(&std.mem.toBytes(inputEvent(c.EV_SYN, c.SYN_REPORT, 0)));
+                        try writer.writeAll(&std.mem.toBytes(inputEvent(c.EV_KEY, c.BTN_LEFT, 0)));
+                        // huh there's a chance for a missed syn_report here because of multithreading
+                    }
+                    continue;
+                }
+                if (event.code == c.BTN_RIGHT) {
+                    rmb_active = event.value == 1;
+                    try writer.writeAll(&std.mem.toBytes(event));
+                    if (timer_enabled and event.value == 1) {
+                        try writer.writeAll(&std.mem.toBytes(inputEvent(c.EV_SYN, c.SYN_REPORT, 0)));
+                        try writer.writeAll(&std.mem.toBytes(inputEvent(c.EV_KEY, c.BTN_RIGHT, 0)));
+                        // huh there's a chance for a missed syn_report here because of multithreading
+                    }
+                    continue;
                 }
                 if (event.code == 279) { // button 7
                     if (ignore_next_rpl_up and event.value == 0) {
