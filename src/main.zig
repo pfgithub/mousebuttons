@@ -175,6 +175,40 @@ pub fn main_write() !void {
     std.time.sleep(std.time.ns_per_s * 1);
 }
 
+const Shared = struct {
+    enabled_lock: *std.Mutex,
+    write_lock: *std.Mutex,
+    writer: *const std.fs.File.Writer,
+    lmb_active: *bool,
+    rmb_active: *bool,
+    timer_enabled: *bool,
+};
+
+pub fn timerThread(shared: Shared) !void {
+    while (true) {
+        const enabled_lock = shared.enabled_lock.acquire();
+        enabled_lock.release();
+
+        std.time.sleep(50 * std.time.ns_per_ms); // roughly 20 times a second
+
+        const held = shared.write_lock.acquire();
+        defer held.release();
+
+        if (shared.timer_enabled.* and shared.lmb_active.*) {
+            try shared.writer.writeAll(&std.mem.toBytes(inputEvent(c.EV_KEY, c.BTN_LEFT, 1)));
+            try shared.writer.writeAll(&std.mem.toBytes(inputEvent(c.EV_SYN, c.SYN_REPORT, 0)));
+            try shared.writer.writeAll(&std.mem.toBytes(inputEvent(c.EV_KEY, c.BTN_LEFT, 0)));
+            try shared.writer.writeAll(&std.mem.toBytes(inputEvent(c.EV_SYN, c.SYN_REPORT, 0)));
+        }
+        if (shared.timer_enabled.* and shared.rmb_active.*) {
+            try shared.writer.writeAll(&std.mem.toBytes(inputEvent(c.EV_KEY, c.BTN_RIGHT, 1)));
+            try shared.writer.writeAll(&std.mem.toBytes(inputEvent(c.EV_SYN, c.SYN_REPORT, 0)));
+            try shared.writer.writeAll(&std.mem.toBytes(inputEvent(c.EV_KEY, c.BTN_RIGHT, 0)));
+            try shared.writer.writeAll(&std.mem.toBytes(inputEvent(c.EV_SYN, c.SYN_REPORT, 0)));
+        }
+    }
+}
+
 pub fn main() !void {
     var arena_alloc = std.heap.ArenaAllocator.init(std.heap.page_allocator);
     defer arena_alloc.deinit();
@@ -256,11 +290,28 @@ pub fn main() !void {
     // stuff
     var btn_state = false;
     var thbd_state = false;
-    var thud_state = false; // for repeating mouse events on a short timer (eg 20/sec or something)
+    var timer_enabled = false; // for repeating mouse events on a short timer (eg 20/sec or something)
     // var timer = try std.time.Timer.start();
 
     var ignore_next = [_]bool{false} ** 3;
     var ignore_next_rpl_up = false;
+
+    var write_lock = std.Mutex{};
+    var lmb_active = false;
+    var rmb_active = false;
+
+    var enabled_lock = std.Mutex{};
+    var enabled_lock_held: ?std.Mutex.Held = enabled_lock.acquire();
+
+    const timer_thread = try std.Thread.spawn(Shared{
+        .write_lock = &write_lock,
+        .enabled_lock = &enabled_lock,
+        .writer = &writer,
+        .lmb_active = &lmb_active,
+        .rmb_active = &rmb_active,
+        .timer_enabled = &timer_enabled,
+    }, timerThread);
+    defer timer_thread.wait(); // not necessary
 
     while (true) {
         var events = [_]c.struct_input_event{undefined} ** 64;
@@ -270,6 +321,9 @@ pub fn main() !void {
         }
         var wlpi: usize = 0;
         wlp: while (wlpi < read_count / @sizeOf(c.struct_input_event)) : (wlpi += 1) {
+            const held = write_lock.acquire();
+            defer held.release();
+
             // timer.reset();
             // defer std.log.info("{}", .{timer.read()});
             var event = events[wlpi];
@@ -279,16 +333,6 @@ pub fn main() !void {
                     try writer.writeAll(&std.mem.toBytes(inputEvent(c.EV_KEY, if (event.value == 1) c.KEY_VOLUMEUP else c.KEY_VOLUMEDOWN, 1)));
                     try writer.writeAll(&std.mem.toBytes(inputEvent(c.EV_SYN, c.SYN_REPORT, 0)));
                     try writer.writeAll(&std.mem.toBytes(inputEvent(c.EV_KEY, if (event.value == 1) c.KEY_VOLUMEUP else c.KEY_VOLUMEDOWN, 0)));
-                    continue;
-                }
-            }
-            if (event.@"type" == c.EV_REL and thud_state) {
-                if (event.code == 11) {
-                    try writer.writeAll(&std.mem.toBytes(inputEvent(c.EV_REL, 12, -event.value * 120))); // REL_HWHEEL_HI_RES
-                    continue;
-                }
-                if (event.code == c.REL_WHEEL) {
-                    try writer.writeAll(&std.mem.toBytes(inputEvent(c.EV_REL, c.REL_HWHEEL, -event.value)));
                     continue;
                 }
             }
@@ -302,11 +346,45 @@ pub fn main() !void {
                     continue;
                 }
                 if (event.code == 277) { // button 5
-                    thud_state = event.value == 1;
+                    timer_enabled = event.value == 1;
+                    if (timer_enabled) {
+                        if (enabled_lock_held) |h| {
+                            h.release();
+                            enabled_lock_held = null;
+                        }
+                    } else {
+                        if (enabled_lock_held == null) enabled_lock_held = enabled_lock.acquire();
+                    }
+                    if (timer_enabled and lmb_active) {
+                        try writer.writeAll(&std.mem.toBytes(inputEvent(c.EV_KEY, c.BTN_LEFT, 0)));
+                    }
+                    if (timer_enabled and rmb_active) {
+                        try writer.writeAll(&std.mem.toBytes(inputEvent(c.EV_KEY, c.BTN_RIGHT, 0)));
+                    }
                     continue;
                 }
                 if (event.code == 280) { // button 8
                     try writer.writeAll(&std.mem.toBytes(inputEvent(c.EV_KEY, c.KEY_UNKNOWN, event.value)));
+                    continue;
+                }
+                if (event.code == c.BTN_LEFT) {
+                    lmb_active = event.value == 1;
+                    try writer.writeAll(&std.mem.toBytes(event));
+                    if (timer_enabled and event.value == 1) {
+                        try writer.writeAll(&std.mem.toBytes(inputEvent(c.EV_SYN, c.SYN_REPORT, 0)));
+                        try writer.writeAll(&std.mem.toBytes(inputEvent(c.EV_KEY, c.BTN_LEFT, 0)));
+                        // huh there's a chance for a missed syn_report here because of multithreading
+                    }
+                    continue;
+                }
+                if (event.code == c.BTN_RIGHT) {
+                    lmb_active = event.value == 1;
+                    try writer.writeAll(&std.mem.toBytes(event));
+                    if (timer_enabled and event.value == 1) {
+                        try writer.writeAll(&std.mem.toBytes(inputEvent(c.EV_SYN, c.SYN_REPORT, 0)));
+                        try writer.writeAll(&std.mem.toBytes(inputEvent(c.EV_KEY, c.BTN_RIGHT, 0)));
+                        // huh there's a chance for a missed syn_report here because of multithreading
+                    }
                     continue;
                 }
                 inline for (.{ .{ c.BTN_LEFT, 9001 }, .{ c.BTN_RIGHT, 9002 }, .{ c.BTN_MIDDLE, 9003 } }) |btninfo, i| {
