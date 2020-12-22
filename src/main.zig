@@ -181,10 +181,16 @@ pub fn main() !void {
 
     const alloc = &arena_alloc.allocator;
 
-    const args = try std.process.argsAlloc(alloc);
-
     // WRITER
-    const file = try std.fs.cwd().openFile("/dev/uinput", .{ .read = false, .write = true, .lock_nonblocking = true });
+    // huh this seems to be openable without root, interesting
+    const file = std.fs.cwd().openFile("/dev/uinput", .{ .read = false, .write = true, .lock_nonblocking = true }) catch |e| switch (e) {
+        error.AccessDenied => {
+            return std.log.crit("This program requires root access to run.", .{});
+        },
+        else => {
+            return std.log.crit("Could not open /dev/uinput. {}", .{e});
+        },
+    };
     defer file.close();
 
     const writer = file.writer();
@@ -228,8 +234,18 @@ pub fn main() !void {
     try ioctl_trigger(file.handle, c.UI_DEV_CREATE);
     defer ioctl_trigger(file.handle, c.UI_DEV_DESTROY) catch @panic("could not destroy");
 
+    const args = try std.process.argsAlloc(alloc);
+    if (args.len != 2) return std.log.crit("Usage: `sudo mousebuttons /dev/input/eventXX`", .{});
+
     // READER
-    const readfile = try std.fs.cwd().openFile("/dev/input/event18", .{});
+    const readfile = std.fs.cwd().openFile(args[1], .{}) catch |e| switch (e) {
+        error.AccessDenied => {
+            return std.log.crit("This program requires root access to run.", .{});
+        },
+        else => {
+            return std.log.crit("Could not open {}. {}", .{ args[1], e });
+        },
+    };
     defer readfile.close();
 
     try ioctl_write(readfile.handle, c.EVIOCGRAB, 1); // grab
@@ -240,7 +256,7 @@ pub fn main() !void {
     // stuff
     var btn_state = false;
     var thbd_state = false;
-    var thud_state = false;
+    var thud_state = false; // for repeating mouse events on a short timer (eg 20/sec or something)
     // var timer = try std.time.Timer.start();
 
     var ignore_next = [_]bool{false} ** 3;
@@ -277,16 +293,19 @@ pub fn main() !void {
                 }
             }
             if (event.@"type" == c.EV_KEY) {
-                if (event.code == 282) {
+                if (event.code == 282) { // button 10
                     btn_state = event.value == 1;
                     continue;
                 }
-                if (event.code == 278) {
+                if (event.code == 278) { // button 6
                     thbd_state = event.value == 1;
                     continue;
                 }
-                if (event.code == 277) {
+                if (event.code == 277) { // button 5
                     thud_state = event.value == 1;
+                    continue;
+                }
+                if (event.code == 280) { // button 8
                     try writer.writeAll(&std.mem.toBytes(inputEvent(c.EV_KEY, c.KEY_UNKNOWN, event.value)));
                     continue;
                 }
@@ -308,7 +327,7 @@ pub fn main() !void {
                         }
                     }
                 }
-                if (event.code == 279) {
+                if (event.code == 279) { // button 7
                     if (ignore_next_rpl_up and event.value == 0) {
                         ignore_next_rpl_up = false;
                         continue;
