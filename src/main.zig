@@ -176,8 +176,8 @@ pub fn main_write() !void {
 }
 
 const Shared = struct {
-    enabled_lock: *std.Mutex,
-    write_lock: *std.Mutex,
+    enabled_lock: *std.Thread.Mutex,
+    write_lock: *std.Thread.Mutex,
     writer: *const std.fs.File.Writer,
     lmb_active: *bool,
     rmb_active: *bool,
@@ -277,7 +277,7 @@ pub fn main() !void {
             return std.log.crit("This program requires root access to run.", .{});
         },
         else => {
-            return std.log.crit("Could not open {}. {}", .{ args[1], e });
+            return std.log.crit("Could not open {s}. {}", .{ args[1], e });
         },
     };
     defer readfile.close();
@@ -296,12 +296,12 @@ pub fn main() !void {
     var ignore_next = [_]bool{false} ** 3;
     var ignore_next_rpl_up = false;
 
-    var write_lock = std.Mutex{};
+    var write_lock = std.Thread.Mutex{};
     var lmb_active = false;
     var rmb_active = false;
 
-    var enabled_lock = std.Mutex{};
-    var enabled_lock_held: ?std.Mutex.Held = enabled_lock.acquire();
+    var enabled_lock = std.Thread.Mutex{};
+    var enabled_lock_held: ?@TypeOf(enabled_lock.acquire()) = enabled_lock.acquire();
 
     const timer_thread = try std.Thread.spawn(Shared{
         .write_lock = &write_lock,

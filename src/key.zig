@@ -84,7 +84,7 @@ pub fn main() !u8 {
                     if (v_or_ptt_pushed) {
                         std.log.info("ptt down", .{});
                         // volume is 0%-100%: 0-65536. higher volume is allowed.
-                        var cp = try std.ChildProcess.init(&[_][]const u8{ "pacmd", "set-source-volume", "0", "65536" }, alloc);
+                        var cp = try std.ChildProcess.init(&[_][]const u8{ "pacmd", "set-source-volume", "0", "98304" }, alloc);
                         _ = try cp.spawnAndWait();
                     } else {
                         std.log.info("ptt up", .{});
