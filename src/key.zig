@@ -15,6 +15,10 @@ fn XISetMask(ptr: [*]u8, comptime event: c_int) void {
 pub fn main() !u8 {
     const alloc = std.heap.page_allocator;
 
+    const args = try std.process.argsAlloc(alloc);
+    if (args.len != 2) @panic("bad args. usage: key '…' (name from `pacmdn list-sources)");
+    const source_name = args[1];
+
     const display = c.XOpenDisplay(null) orelse {
         std.log.crit("Cannot open X display", .{});
         return 1;
@@ -84,11 +88,11 @@ pub fn main() !u8 {
                     if (v_or_ptt_pushed) {
                         std.log.info("ptt down", .{});
                         // volume is 0%-100%: 0-65536. higher volume is allowed.
-                        var cp = try std.ChildProcess.init(&[_][]const u8{ "pacmd", "set-source-volume", "0", "98304" }, alloc);
+                        var cp = try std.ChildProcess.init(&[_][]const u8{ "pacmd", "set-source-volume", source_name, "98304" }, alloc);
                         _ = try cp.spawnAndWait();
                     } else {
                         std.log.info("ptt up", .{});
-                        var cp = try std.ChildProcess.init(&[_][]const u8{ "pacmd", "set-source-volume", "0", "0" }, alloc);
+                        var cp = try std.ChildProcess.init(&[_][]const u8{ "pacmd", "set-source-volume", source_name, "0" }, alloc);
                         _ = try cp.spawnAndWait();
                     }
                 }
