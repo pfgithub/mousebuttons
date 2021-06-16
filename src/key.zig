@@ -16,8 +16,9 @@ pub fn main() !u8 {
     const alloc = std.heap.page_allocator;
 
     const args = try std.process.argsAlloc(alloc);
-    if (args.len != 2) @panic("bad args. usage: key '…' (name from `pacmdn list-sources)");
+    if (args.len != 3) @panic("bad args. usage: key '…' (name from `pacmdn list-sources) '…' (volume out of some number)");
     const source_name = args[1];
+    const audio_level = args[2];
 
     const display = c.XOpenDisplay(null) orelse {
         std.log.crit("Cannot open X display", .{});
@@ -45,12 +46,12 @@ pub fn main() !u8 {
         }
     }
 
-    const mask_len = c.XIMaskLen(c.XI_LASTEVENT);
+    const mask_len = @intCast(usize, c.XIMaskLen(c.XI_LASTEVENT));
 
     const root = c.XDefaultRootWindow(display);
     var mask = c.XIEventMask{
         .deviceid = c.XIAllMasterDevices,
-        .mask_len = mask_len,
+        .mask_len = @intCast(c_int, mask_len),
         .mask = (try alloc.alloc(u8, mask_len)).ptr,
     };
     for (mask.mask[0..mask_len]) |*v| v.* = 0;
@@ -88,7 +89,7 @@ pub fn main() !u8 {
                     if (v_or_ptt_pushed) {
                         std.log.info("ptt down", .{});
                         // volume is 0%-100%: 0-65536. higher volume is allowed.
-                        var cp = try std.ChildProcess.init(&[_][]const u8{ "pacmd", "set-source-volume", source_name, "98304" }, alloc);
+                        var cp = try std.ChildProcess.init(&[_][]const u8{ "pacmd", "set-source-volume", source_name, audio_level }, alloc);
                         _ = try cp.spawnAndWait();
                     } else {
                         std.log.info("ptt up", .{});

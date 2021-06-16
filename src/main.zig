@@ -303,14 +303,14 @@ pub fn main() !void {
     var enabled_lock = std.Thread.Mutex{};
     var enabled_lock_held: ?@TypeOf(enabled_lock.acquire()) = enabled_lock.acquire();
 
-    const timer_thread = try std.Thread.spawn(Shared{
+    const timer_thread = try std.Thread.spawn(timerThread, Shared{
         .write_lock = &write_lock,
         .enabled_lock = &enabled_lock,
         .writer = &writer,
         .lmb_active = &lmb_active,
         .rmb_active = &rmb_active,
         .timer_enabled = &timer_enabled,
-    }, timerThread);
+    });
     defer timer_thread.wait(); // not necessary
 
     while (true) {
