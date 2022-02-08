@@ -127,6 +127,7 @@ fn typename(typev: u16) []const u8 {
 }
 
 fn codename(typev: u16, codev: u16) []const u8 {
+    _ = typev;
     if (codev > key_names.len) return "";
     return key_names[codev] orelse "";
 }
@@ -139,8 +140,8 @@ fn ioctl_read(fd: std.os.fd_t, request: u32, comptime ResT: type) !ResT {
 fn ioctl_write(fd: std.os.fd_t, request: u32, value: usize) !void {
     while (true) {
         switch (std.os.errno(std.os.system.ioctl(fd, @intCast(c_int, request), value))) {
-            0 => break,
-            std.os.EINTR => continue,
+            .SUCCESS => break,
+            .INTR => continue,
             else => return error.Error,
         }
     }
@@ -158,23 +159,6 @@ fn inputEvent(typev: u16, codev: u16, value: i32) c.struct_input_event {
     };
 }
 
-pub fn main_write() !void {
-    const file = try std.fs.cwd().openFile("/dev/uinput", .{ .read = false, .write = true, .lock_nonblocking = true });
-    defer file.close();
-
-    std.time.sleep(std.time.ns_per_s * 1);
-
-    var i: usize = 50;
-    while (i > 0) : (i -= 1) {
-        try writer.writeAll(&std.mem.toBytes(inputEvent(c.EV_REL, c.REL_X, 5)));
-        try writer.writeAll(&std.mem.toBytes(inputEvent(c.EV_REL, c.REL_Y, 5)));
-        try writer.writeAll(&std.mem.toBytes(inputEvent(c.EV_SYN, c.SYN_REPORT, 0)));
-        std.time.sleep(15 * std.time.ns_per_ms);
-    }
-
-    std.time.sleep(std.time.ns_per_s * 1);
-}
-
 const Shared = struct {
     enabled_lock: *std.Thread.Mutex,
     write_lock: *std.Thread.Mutex,
@@ -186,13 +170,13 @@ const Shared = struct {
 
 pub fn timerThread(shared: Shared) !void {
     while (true) {
-        const enabled_lock = shared.enabled_lock.acquire();
-        enabled_lock.release();
+        shared.enabled_lock.lock();
+        shared.enabled_lock.unlock();
 
         std.time.sleep(50 * std.time.ns_per_ms); // roughly 20 times a second
 
-        const held = shared.write_lock.acquire();
-        defer held.release();
+        shared.write_lock.lock();
+        defer shared.write_lock.unlock();
 
         if (shared.timer_enabled.* and shared.lmb_active.*) {
             try shared.writer.writeAll(&std.mem.toBytes(inputEvent(c.EV_KEY, c.BTN_LEFT, 1)));
@@ -213,16 +197,16 @@ pub fn main() !void {
     var arena_alloc = std.heap.ArenaAllocator.init(std.heap.page_allocator);
     defer arena_alloc.deinit();
 
-    const alloc = &arena_alloc.allocator;
+    const alloc = arena_alloc.allocator();
 
     // WRITER
     // huh this seems to be openable without root, interesting
-    const file = std.fs.cwd().openFile("/dev/uinput", .{ .read = false, .write = true, .lock_nonblocking = true }) catch |e| switch (e) {
+    const file = std.fs.cwd().openFile("/dev/uinput", .{ .mode = .write_only, .lock_nonblocking = true }) catch |e| switch (e) {
         error.AccessDenied => {
-            return std.log.crit("This program requires root access to run.", .{});
+            return std.log.err("This program requires root access to run.", .{});
         },
         else => {
-            return std.log.crit("Could not open /dev/uinput. {}", .{e});
+            return std.log.err("Could not open /dev/uinput. {}", .{e});
         },
     };
     defer file.close();
@@ -269,15 +253,15 @@ pub fn main() !void {
     defer ioctl_trigger(file.handle, c.UI_DEV_DESTROY) catch @panic("could not destroy");
 
     const args = try std.process.argsAlloc(alloc);
-    if (args.len != 2) return std.log.crit("Usage: `sudo mousebuttons /dev/input/eventXX`", .{});
+    if (args.len != 2) return std.log.err("Usage: `sudo mousebuttons /dev/input/eventXX`", .{});
 
     // READER
     const readfile = std.fs.cwd().openFile(args[1], .{}) catch |e| switch (e) {
         error.AccessDenied => {
-            return std.log.crit("This program requires root access to run.", .{});
+            return std.log.err("This program requires root access to run.", .{});
         },
         else => {
-            return std.log.crit("Could not open {s}. {}", .{ args[1], e });
+            return std.log.err("Could not open {s}. {}", .{ args[1], e });
         },
     };
     defer readfile.close();
@@ -301,17 +285,20 @@ pub fn main() !void {
     var rmb_active = false;
 
     var enabled_lock = std.Thread.Mutex{};
-    var enabled_lock_held: ?@TypeOf(enabled_lock.acquire()) = enabled_lock.acquire();
 
-    const timer_thread = try std.Thread.spawn(timerThread, Shared{
+    enabled_lock.lock();
+    var enabled_lock_held: bool = true;
+
+    const timer_shared = Shared{
         .write_lock = &write_lock,
         .enabled_lock = &enabled_lock,
         .writer = &writer,
         .lmb_active = &lmb_active,
         .rmb_active = &rmb_active,
         .timer_enabled = &timer_enabled,
-    });
-    defer timer_thread.wait(); // not necessary
+    };
+    const timer_thread = try std.Thread.spawn(.{}, timerThread, .{timer_shared});
+    defer timer_thread.join(); // not necessary
 
     while (true) {
         var events = [_]c.struct_input_event{undefined} ** 64;
@@ -321,8 +308,8 @@ pub fn main() !void {
         }
         var wlpi: usize = 0;
         wlp: while (wlpi < read_count / @sizeOf(c.struct_input_event)) : (wlpi += 1) {
-            const held = write_lock.acquire();
-            defer held.release();
+            write_lock.lock();
+            write_lock.unlock();
 
             // timer.reset();
             // defer std.log.info("{}", .{timer.read()});
@@ -348,12 +335,15 @@ pub fn main() !void {
                 if (event.code == 277) { // button 5
                     timer_enabled = event.value == 1;
                     if (timer_enabled) {
-                        if (enabled_lock_held) |h| {
-                            h.release();
-                            enabled_lock_held = null;
+                        if (enabled_lock_held) {
+                            enabled_lock.unlock();
+                            enabled_lock_held = false;
                         }
                     } else {
-                        if (enabled_lock_held == null) enabled_lock_held = enabled_lock.acquire();
+                        if (!enabled_lock_held) {
+                            enabled_lock.lock();
+                            enabled_lock_held = true;
+                        }
                     }
                     if (timer_enabled and lmb_active) {
                         try writer.writeAll(&std.mem.toBytes(inputEvent(c.EV_KEY, c.BTN_LEFT, 0)));

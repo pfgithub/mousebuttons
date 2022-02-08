@@ -21,7 +21,7 @@ pub fn main() !u8 {
     const audio_level = args[2];
 
     const display = c.XOpenDisplay(null) orelse {
-        std.log.crit("Cannot open X display", .{});
+        std.log.err("Cannot open X display", .{});
         return 1;
     };
 
@@ -29,7 +29,7 @@ pub fn main() !u8 {
     var queryEvent: c_int = undefined;
     var queryError: c_int = undefined;
     if (c.XQueryExtension(display, "XInputExtension", &xiOpcode, &queryEvent, &queryError) != 1) {
-        std.log.crit("X Input extension not available", .{});
+        std.log.err("X Input extension not available", .{});
         return 2;
     }
 
@@ -38,10 +38,10 @@ pub fn main() !u8 {
         var minor: c_int = 0;
         const query_result = c.XIQueryVersion(display, &major, &minor);
         if (query_result == c.BadRequest) {
-            std.log.crit("Need XI 2.0 support (got {}.{})", .{ major, minor });
+            std.log.err("Need XI 2.0 support (got {}.{})", .{ major, minor });
             return 3;
         } else if (query_result != c.Success) {
-            std.log.crit("Internal error", .{});
+            std.log.err("Internal error", .{});
             return 4;
         }
     }
