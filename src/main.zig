@@ -194,6 +194,7 @@ pub fn timerThread(shared: Shared) !void {
 }
 
 pub fn main() !void {
+    std.log.info("Mousebuttons is running", .{});
     var arena_alloc = std.heap.ArenaAllocator.init(std.heap.page_allocator);
     defer arena_alloc.deinit();
 
@@ -246,7 +247,7 @@ pub fn main() !void {
     usetup.id.vendor = 0x046d;
     usetup.id.product = 0xc08b;
     usetup.id.version = 0x111;
-    std.mem.copy(u8, &usetup.name, "Fake Mouse");
+    std.mem.copy(u8, &usetup.name, "mousebuttons Virtual Input");
 
     try ioctl_write(file.handle, c.UI_DEV_SETUP_2, @ptrToInt(&usetup));
     try ioctl_trigger(file.handle, c.UI_DEV_CREATE);

@@ -7,11 +7,15 @@ usage:
 - edit src/main.zig to do the chording you want
 - `zig build mousebuttons`
 - find your mouse in `xinput`
+  - make your terminal window bigger so it doesn't wrap. it's split into nice
+    columns then.
+  - look under "Virtual Core Pointer"
+  - ignore items labeled "Consumer Control"
 - use `xinput --list-props deviceid`
 - find "Device Node (276). that is the dev input file for the mouse.
 - `sudo zig-out/bin/mousebuttons /dev/input/eventXX`
-- `systemsettings5 mouse`
-- toggle someting on and back off and apply both times
+- `xinput set-prop 'pointer:mousebuttons Virtual Input' 'libinput Accel Profile Enabled' '0' '1'` (or set it to match the same values as your previous mouse)
+  - TODO: consider automatically copying xinput props from the starting mouse
 
 performance: doesn't noticably impact things. a debug build was like 0.01ms or something. to test, disable mouse grabbing and evtest both event files at once, then check the difference in times. note that this will cause every mouse event you make to happen double so be careful while this is running.
 
