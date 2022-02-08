@@ -9,7 +9,7 @@ usage:
 - find your mouse in `xinput`
 - use `xinput --list-props deviceid`
 - find "Device Node (276). that is the dev input file for the mouse.
-- `sudo zig-cache/bin/mousebuttons /dev/input/eventXX`
+- `sudo zig-out/bin/mousebuttons /dev/input/eventXX`
 - `systemsettings5 mouse`
 - toggle someting on and back off and apply both times
 
