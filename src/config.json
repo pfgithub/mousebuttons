@@ -1,0 +1,62 @@
+{
+    "buttons": {
+        "_input_comment": "we need to track the states of all the input keys",
+        "input": [
+            {"name": "left", "id": 272},
+            {"name": "right", "id": 273},
+            {"name": "middle", "id": 274},
+            {"name": "thumb_fwd", "id": 277},
+            {"name": "thumb_back", "id": 278},
+            {"name": "index_fwd", "id": 279},
+            {"name": "index_back", "id": 280},
+            {"name": "thumb_pick", "id": 282},
+            {"name": "scroll_up", "kind": "special_mousewheel_up", "_comment": "we need to simulate two events"},
+            {"name": "scroll_down", "kind": "special_mousewheel_down", "_comment": "pressed and released"}
+        ],
+        "_output_comment": "we need to ui_set_keybit all the output keys",
+        "_output_comment2": "TODO: also copy all supported bits from the input device so if an event isn't handled here, it can be passed through",
+        "_output_comment3": "https://github.com/freedesktop-unofficial-mirror/evtest/blob/b8343ec1124da18bdabcc04809a8731b9e39295d/evtest.c#L995",
+        "output": [
+            {"name": "left", "id": 272},
+            {"name": "right", "id": 273},
+            {"name": "middle", "id": 274},
+            {"name": "volumedown", "id": 114},
+            {"name": "volumeup", "id": 115},
+            {"name": "push_to_talk", "id": 240},
+            {"name": "scroll_up", "kind": "special_mousewheel_up"},
+            {"name": "scroll_down", "kind": "special_mousewheel_down"}
+        ]
+    },
+    "scenes": {
+        "main": {
+            "left": {"action": "press", "button": "left"},
+            "right": {"action": "press", "button": "right"},
+            "middle": {"action": "press", "button": "middle"},
+            "thumb_fwd": {"action": "press", "buttons": ["left", "right"]},
+            "index_back": {"action": "press", "button": "push_to_talk"},
+            "scroll_up": {"action": "press", "button": "scroll_up"},
+            "scroll_down": {"action": "press", "button": "scroll_down"},
+            "pick": {"action": "holdLayer", "layer": ["instant_clicks"]},
+            "thumb_back": {"action": "holdLayer", "layer": ["change_volume"]},
+            "thumb_fwd": {"action": "holdLayer", "layer": ["autoclicker"]}
+        }
+    },
+    "layers": {
+        "instant_clicks": {
+            "left": {"action": "press", "mode": "instant", "button": "left"},
+            "right": {"action": "press", "mode": "instant", "button": "right"},
+            "middle": {"action": "press", "mode": "instant", "button": "middle"},
+            "thumb_fwd": {"action": "press", "mode": "instant", "buttons": ["left", "right"]}
+        },
+        "change_volume": {
+            "scroll_down": {"action": "press", "button": "volume_down"},
+            "scroll_up": {"action": "press", "button": "volume_up"}
+        },
+        "autoclicker": {
+            "left": {"action": "press", "mode": "autoclicker", "button": "left"},
+            "right": {"action": "press", "mode": "autoclicker", "button": "right"},
+            "middle": {"action": "press", "mode": "autoclicker", "button": "middle"},
+            "thumb_fwd": {"action": "press", "mode": "autoclicker", "button": ["left", "right"]}
+        }
+    }
+}
