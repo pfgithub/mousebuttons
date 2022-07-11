@@ -305,9 +305,9 @@ pub fn main() !void {
     std.time.sleep(100 * std.time.ns_per_ms); // TODO use x functions to detect on mouse connects
 
     std.log.info("Configuring mouse opts…", .{}); // TODO copy props from source device using x functions directly
-    var configurator = try std.ChildProcess.init(&.{"xinput", "set-prop", "pointer:mousebuttons Virtual Input", "libinput Accel Profile Enabled", "0", "1"}, alloc);
+    var configurator = std.ChildProcess.init(&.{ "xinput", "set-prop", "pointer:mousebuttons Virtual Input", "libinput Accel Profile Enabled", "0", "1" }, alloc);
     const res = try configurator.spawnAndWait();
-    if(res != .Exited or res.Exited != 0) {
+    if (res != .Exited or res.Exited != 0) {
         std.log.err("E COULD NOT CONFIGURE MOUSE. {any}", .{res});
         std.process.exit(1);
     }

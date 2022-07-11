@@ -16,6 +16,7 @@ usage:
 - `sudo zig-out/bin/mousebuttons /dev/input/eventXX`
 - `xinput set-prop 'pointer:mousebuttons Virtual Input' 'libinput Accel Profile Enabled' '0' '1'` (or set it to match the same values as your previous mouse)
   - TODO: consider automatically copying xinput props from the starting mouse
+  - NOTE: the above does not work on one of my computers for some reason. I still have to do that `systemsettings5` toggle mouse acceleration between 'accelerated' and 'flat'. TODO: figure out what's wrong
 
 performance: doesn't noticably impact things. a debug build was like 0.01ms or something. to test, disable mouse grabbing and evtest both event files at once, then check the difference in times. note that this will cause every mouse event you make to happen double so be careful while this is running.
 
